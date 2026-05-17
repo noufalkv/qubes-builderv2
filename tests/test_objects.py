@@ -12,7 +12,7 @@ from qubesbuilder.distribution import QubesDistribution
 from qubesbuilder.exc import ComponentError, DistributionError, ConfigError
 from qubesbuilder.executors.container import ContainerExecutor
 from qubesbuilder.pluginmanager import PluginManager
-from qubesbuilder.plugins import DistributionComponentPlugin
+from qubesbuilder.plugins import DistributionComponentPlugin, JobDependency
 from qubesbuilder.plugins.template import TemplateBuilderPlugin
 from qubesbuilder.template import QubesTemplate, TemplateError
 
@@ -327,6 +327,57 @@ def test_dist_family():
 def test_template_plugin_supports_guix():
     template = QubesTemplate({"guix": {"dist": "guix"}})
     assert TemplateBuilderPlugin.supported_template(template)
+
+
+def test_template_plugin_guix_parameters(temp_config_dir):
+    config_file = temp_config_dir / "guix-template.yml"
+    config_file.write_text(
+        f"""
+qubes-release: r4.3
+artifacts-dir: {temp_config_dir / "artifacts"}
+components:
+  - builder-guix:
+      packages: false
+templates:
+  - guix-minimal:
+      dist: guix
+      flavor: minimal
+executor:
+  type: local
+""",
+        encoding="ascii",
+    )
+    config = Config(config_file)
+    template = config.get_templates(["guix-minimal"])[0]
+
+    plugin = TemplateBuilderPlugin(
+        template=template, config=config, stage="prep"
+    )
+
+    sources_dir = plugin.executor.get_sources_dir()
+    assert plugin.environment["TEMPLATE_CONTENT_DIR"] == str(
+        sources_dir / "builder-guix/builder-v2-template"
+    )
+    assert plugin.environment["KEYS_DIR"] == str(
+        sources_dir / "builder-guix/keys"
+    )
+    assert plugin.environment["CACHE_DIR"] == str(
+        plugin.executor.get_cache_dir()
+    )
+    assert plugin.environment["TEMPLATE_FLAVOR_DIR"] == (
+        f"+minimal:{sources_dir}/builder-guix/builder-v2-template/minimal"
+    )
+
+    fetch_dependencies = [
+        dep.reference
+        for dep in plugin.dependencies
+        if isinstance(dep, JobDependency)
+        and dep.reference.component is not None
+    ]
+    assert len(fetch_dependencies) == 1
+    assert fetch_dependencies[0].component.name == "builder-guix"
+    assert fetch_dependencies[0].stage == "fetch"
+    assert fetch_dependencies[0].build == "source"
 
 
 #
