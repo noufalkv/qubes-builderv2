@@ -13,6 +13,7 @@ from qubesbuilder.exc import ComponentError, DistributionError, ConfigError
 from qubesbuilder.executors.container import ContainerExecutor
 from qubesbuilder.pluginmanager import PluginManager
 from qubesbuilder.plugins import DistributionComponentPlugin
+from qubesbuilder.plugins.template import TemplateBuilderPlugin
 from qubesbuilder.template import QubesTemplate, TemplateError
 
 
@@ -289,6 +290,17 @@ def test_dist_non_default_arch():
     assert str(dist) == "vm-debian-13.ppc64el"
     assert repr(dist) == repr_str
 
+    dist = QubesDistribution("vm-guix")
+    assert dist.version == "rolling"
+    assert dist.fullname == "guix"
+    assert dist.architecture == "x86_64"
+    assert dist.tag == "guix"
+    assert dist.type == "guix"
+
+    repr_str = "<QubesDistribution vm-guix-rolling.x86_64>"
+    assert dist.to_str() == "vm-guix-rolling.x86_64"
+    assert str(dist) == "vm-guix-rolling.x86_64"
+    assert repr(dist) == repr_str
 
 def test_dist_unknown_package_set():
     with pytest.raises(DistributionError) as e:
@@ -308,7 +320,13 @@ def test_dist_unknown():
 def test_dist_family():
     assert QubesDistribution("vm-fc42").is_rpm()
     assert QubesDistribution("host-bookworm").is_deb()
+    assert QubesDistribution("vm-guix").is_guix()
     assert not QubesDistribution("host-centos-stream9").is_deb()
+
+
+def test_template_plugin_supports_guix():
+    template = QubesTemplate({"guix": {"dist": "guix"}})
+    assert TemplateBuilderPlugin.supported_template(template)
 
 
 #
